@@ -5,6 +5,12 @@ from discord.ext import commands, tasks
 from itertools import cycle
 import json
 import time
+import datetime
+import pytz
+import pymongo
+import dns
+from pymongo import MongoClient
+from utils import *
 
 def get_prefix(client, message):
     with open('prefixes.json', 'r') as f:
@@ -16,10 +22,16 @@ def get_prefix(client, message):
 client = commands.Bot(command_prefix = get_prefix)
 client.remove_command('help')
 status = cycle(['Status 1', 'Status 2'])
+cluster = MongoClient(os.environ.get('MDB_CONNEC'))
+db = cluster['SpaceBot']
+# db.add_son_manipulator(Transform())
+# collection = db['Stats']
+collection = db.get_collection('Stats', codec_options=codec_options)
+# collection.insert_one({'_id': 0, 'name': 'Laryn', 'score': 6})
 
-joined = messages = 0
+joined = messages = count = 0
 first = True
-
+users = {}
 # @client.event
 # async def on_ready():
 #     print('Bot is ready!')
@@ -66,6 +78,7 @@ async def clear(ctx, amount):
     await ctx.channel.purge(limit=amount)
 
 @client.command()
+@commands.check(special_check)
 async def kick(ctx, member : discord.Member, *, reason=None):
     print('here')
     await member.kick(reason=reason)
@@ -73,6 +86,7 @@ async def kick(ctx, member : discord.Member, *, reason=None):
 
 
 @client.command()
+@commands.check(special_check)
 async def ban(ctx, member : discord.Member, *, reason=None):
     await member.ban(reason=reason)
     await ctx.send(f'Banned {member.mention}')
@@ -108,6 +122,7 @@ for filename in os.listdir('./cogs'):
         client.load_extension(f'cogs.{filename[:-3]}')
 
 @client.command(aliases=['exit', 'quit'])
+@commands.check(special_check)
 async def _quit(ctx):
     await client.change_presence(status=discord.Status.offline)
     await client.logout()
@@ -116,7 +131,9 @@ async def _quit(ctx):
 async def on_ready():
     await client.change_presence(status=discord.Status.dnd, activity=discord.Game('League of Legends'))
     change_status.start()
-    update_stats.start()
+    clear_coll(collection)
+    # update_stats_JSON.start()
+    update_DB.start()
     print('SpaceBot on standby.')
 
 @tasks.loop(seconds=5)
@@ -137,8 +154,6 @@ async def clear_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send('Please specifiy an amount of messages to delete.')
 
-def special_check(ctx):
-    return ctx.author.id == int(os.environ.get('MY_ID'))
 
 @client.command()
 @commands.check(special_check)
@@ -183,25 +198,36 @@ async def help(ctx):
     embed = discord.Embed(
         color = discord.Color.orange()
     )
-    embed.set_author(name='Help')
-    embed.add_field(name='.ping', value='Returns Pong!', inline=False)
+    embed.set_author(name='Command List')
+    embed.add_field(name='/ping', value='Display your latency', inline=False)
+    embed.add_field(name='/max', value='Display @user\'s most commonly used word', inline=False)
+    embed.add_field(name='/8ball', value='Ask the 8ball a question!', inline=False)
+
 
     await author.send(embed=embed)
 
 @tasks.loop(seconds=10)
-async def update_stats():
+async def update_stats_JSON():
     global first
     if first:
         first = False
         return
-    curr_time, secs = time.gmtime(), time.time()
+    # curr_time, secs = time.gmtime(), time.time()
+    curr_time, secs = datetime.datetime.now(), time.time()
+    pacific = pytz.timezone('US/Pacific')
+    loc_dt = pacific.localize(curr_time)
+
+    # https://stackoverflow.com/questions/1398674/display-the-time-in-a-different-time-zone
+    fmt = '%Y-%m-%d %H:%M:%S %Z%z'
+
     global joined, messages
 
     try:
         with open('stats.json', 'r') as f:
             stats = json.load(f)
         add = {}
-        add['Time'] = time.strftime('%Y-%m-%d %H:%M:%S', curr_time)
+        # add['Time'] = time.strftime('%Y-%m-%d %H:%M:%S %Z%z', curr_time)
+        add['Time'] = loc_dt.strftime(fmt)
         add['Members Joined'] = joined
         add['Messages Sent'] = messages
         joined = 0
@@ -215,6 +241,42 @@ async def update_stats():
     except Exception as e:
         print(e)
 
+@tasks.loop(seconds=10)
+async def update_DB():
+    global first
+    if first:
+        first = False
+        return
+    global users
+    global count
+    count += 1
+    # print(users)
+    # print('here')
+    ids = []
+    if collection.count_documents({}) > 0:
+        data = collection.find({})
+        # for result in data:
+        #     print(result)
+        ids = [result['_id'] for result in data]
+        # print(ids)
+        # print(data)
+        # print(ids)
+        # print(users)
+        # print(users[0].id)
+    for user in users:
+        # print(user)
+        u = users[user]
+        # print(u)
+        # print(u.id)
+        if u.id in ids:
+            collection.update_one({'_id': u.id}, {'$set': {'user': u}})
+        else:
+            post = {"_id": u.id, 'user': u}
+            collection.insert_one(post)
+    print('Update #' + str(count))
+        # print(users)
+
+
 @client.event
 async def on_member_join(member):
     global joined
@@ -225,9 +287,38 @@ async def on_message(message):
     global messages
     # print(message.author.id)
     # print(int(os.environ.get('BOT_ID')))
-    if message.author.id != int(os.environ.get('BOT_ID')):
-        messages += 1
+
+    # ignore bot messages 
+    # print(message.content)
+    # if message.author.id != int(os.environ.get('BOT_ID')):
+        # messages += 1
+
+    global users
+    # ignore all bot messages
+    if not message.author.bot:
+        if message.author.id not in users:
+            users[message.author.id] = User(message.author.name, message.author.id)
+        user = users[message.author.id]
+        # user = users.get(message.author.id, User(message.author.id)) 
+        if message.content in user.mappings:
+            i = user.mappings[message.content]
+            user.occurrences[i] += 1
+        else:
+            user.mappings[message.content] = len(user.words)
+            user.words.append(message.content)
+            user.occurrences.append(1)
+        # print(message.content)
+        # print(user)
     # https://stackoverflow.com/questions/49331096/why-does-on-message-stop-commands-from-working
     await client.process_commands(message)
+
+@client.command()
+async def max(ctx, member : discord.Member):
+    # user = ctx.message.author.id
+    name, discriminator = member.name, member.id
+    data = collection.find_one({'_id': discriminator})
+
+    # await ctx.send(f'{ctx.message.author.name} has said \'{data["user"].getMax()}\'\n {data["user"].getMaxOccur()} times.')
+    await ctx.send(f'{name} has said \"{data["user"].getMax()}\"\n{data["user"].getMaxOccur()} times.')
 
 client.run(os.environ.get('BOT_KEY'))
