@@ -2,6 +2,8 @@ from bson.codec_options import TypeCodec
 from bson.codec_options import TypeRegistry
 from bson.codec_options import CodecOptions
 
+
+import os
 def clear_coll(collection):
 	collection.delete_many({})
 
@@ -11,12 +13,28 @@ def special_check(ctx):
 
 class User():
 
-	def __init__(self, name, id, mappings={}, words=[], occurrences=[]):
+	def __init__(self, name, id, mappings={}, words=[], occurrences=[], cipher={}):
 		self.name = name
 		self.id = id
-		self.mappings = mappings
-		self.words = words
-		self.occurrences = occurrences
+		if mappings:
+			self.mappings = mappings
+		else:
+			self.mappings = dict()
+		if words:
+			self.words = words
+		else:
+			self.words = list()
+		if occurrences:
+			self.occurrences = occurrences
+		else:
+			self.occurrences = list()
+		# if cipher:
+		# 	self._cipher = cipher
+		# else:
+		# 	self._cipher = dict()
+		self._cipher = dict()
+		self._start = 0
+		self._dur = 0
 
 	def getMax(self):
 		return self.words[self.occurrences.index(self.getMaxOccur())]
@@ -30,6 +48,40 @@ class User():
 	def __repr__(self):
 		return f'name={self.name} id={self.id} mappings={self.mappings} words={self.words} occurrences={self.occurrences}'
 
+	@property
+	def cipher(self):
+		return self._cipher
+
+	@cipher.setter
+	def cipher(self, set):
+		if len(set) != 26 and len(set) != 0:
+			raise ValueError('Incorrect substitution cipher size.')
+		self._cipher = set
+
+	def scrambled(self):
+		return bool(self._cipher)
+
+	@property
+	def start(self):
+		return self._start
+	
+	@start.setter
+	def start(self, set):
+		if set < 0:
+			raise ValueError('Negative time value.')
+		self._start = set
+
+	@property
+	def dur(self):
+		return self._dur
+
+	@dur.setter
+	def dur(self, set):
+		if set < 0:
+			raise ValueError('Negative duration.')
+		self._dur = set
+
+
 # https://api.mongodb.com/python/current/examples/custom_type.html 
 class UserCodec(TypeCodec):
 	python_type = User
@@ -40,7 +92,7 @@ class UserCodec(TypeCodec):
 		return value
 
 	def transform_bson(self, value):
-		if isinstance(value, list) and value[0] == 'User':
+		if isinstance(value, list) and value and value[0] == 'User':
 			return User(value[1], value[2], value[3], value[4], value[5])
 		else:
 			return value

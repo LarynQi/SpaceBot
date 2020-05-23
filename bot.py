@@ -11,7 +11,12 @@ import pymongo
 import dns
 from pymongo import MongoClient
 from utils import *
-
+import random
+from gtts import gTTS
+import asyncio
+# from pynacl import *
+# import PyNaCl
+# from pynacl import *
 def get_prefix(client, message):
     with open('prefixes.json', 'r') as f:
         prefixes = json.load(f)
@@ -21,7 +26,9 @@ def get_prefix(client, message):
 # client = commands.Bot(command_prefix = '.')
 client = commands.Bot(command_prefix = get_prefix)
 client.remove_command('help')
-status = cycle(['Status 1', 'Status 2'])
+# status = cycle(['Status 1', 'Status 2'])
+games = []
+my_games = []
 cluster = MongoClient(os.environ.get('MDB_CONNEC'))
 db = cluster['SpaceBot']
 # db.add_son_manipulator(Transform())
@@ -31,7 +38,10 @@ collection = db.get_collection('Stats', codec_options=codec_options)
 
 joined = messages = count = 0
 first = True
+monitoring = False
+start_monitor = ''
 users = {}
+
 # @client.event
 # async def on_ready():
 #     print('Bot is ready!')
@@ -48,7 +58,7 @@ async def on_member_remove(member):
 # async def ping(ctx):
 #     await ctx.send(f'Pong! {round(client.latency * 1000)}ms')
 
-@client.command(aliases=['8ball','eightball'])
+@client.command(aliases=['8ball','eightball', '8b'])
 async def _8ball(ctx, *, question):
     responses = ["It is certain.",
                 "It is decidedly so.",
@@ -123,17 +133,37 @@ for filename in os.listdir('./cogs'):
 
 @client.command(aliases=['exit', 'quit'])
 @commands.check(special_check)
-async def _quit(ctx):
+async def _quit(ctx, save='save'):
+    if monitoring and save == 'save':
+        curr_time, secs = datetime.datetime.now(), time.time()
+        pacific = pytz.timezone('US/Pacific')
+        loc_dt = pacific.localize(curr_time)
+        fmt = '%Y-%m-%d %H:%M:%S %Z%z'
+        end = loc_dt.strftime(fmt)
+        with open('monitor.json', 'r') as f:
+            data = json.load(f)
+        if not data:
+            data[1] = {'from': start_monitor, 'end': end, 'updates': count}
+        else:
+            int_keys = [int(k) for k in data]
+            data[max(int_keys) + 1] = {'from': start_monitor, 'end': end, 'updates': count}
+        with open('monitor.json', 'w') as f:
+            json.dump(data, f, indent=4)
     await client.change_presence(status=discord.Status.offline)
     await client.logout()
 
 @client.event
 async def on_ready():
-    await client.change_presence(status=discord.Status.dnd, activity=discord.Game('League of Legends'))
-    change_status.start()
-    clear_coll(collection)
-    # update_stats_JSON.start()
+    # await client.change_presence(status=discord.Status.dnd, activity=discord.Game('League of Legends'))
+    # change_status.start()
+    # clear_coll(collection)
+    # # update_stats_JSON.start()
+    read_data(collection)
+    print(users)
+    read_games()
     update_DB.start()
+    add_games.start()
+    change_game.start()
     print('SpaceBot on standby.')
 
 @tasks.loop(seconds=5)
@@ -201,8 +231,8 @@ async def help(ctx):
     embed.set_author(name='Command List')
     embed.add_field(name='/ping', value='Display your latency', inline=False)
     embed.add_field(name='/max', value='Display @user\'s most commonly used word', inline=False)
-    embed.add_field(name='/8ball', value='Ask the 8ball a question!', inline=False)
-
+    embed.add_field(name='/8b', value='Ask the 8ball a question!', inline=False)
+    embed.add_field(name='/say', value='Tell SpaceBot something to say.', inline=False)
 
     await author.send(embed=embed)
 
@@ -241,13 +271,22 @@ async def update_stats_JSON():
     except Exception as e:
         print(e)
 
-@tasks.loop(seconds=10)
+# @tasks.loop(seconds=10)
+@tasks.loop(minutes=10)
 async def update_DB():
     global first
+    global monitoring
+    global start_monitor
+    curr_time, secs = datetime.datetime.now(), time.time()
+    pacific = pytz.timezone('US/Pacific')
+    loc_dt = pacific.localize(curr_time)
+    fmt = '%Y-%m-%d %H:%M:%S %Z%z'
     if first:
         first = False
+        monitoring = True
+        start_monitor = loc_dt.strftime(fmt)
         return
-    global users
+    # global users
     global count
     count += 1
     # print(users)
@@ -272,8 +311,14 @@ async def update_DB():
             collection.update_one({'_id': u.id}, {'$set': {'user': u}})
         else:
             post = {"_id": u.id, 'user': u}
-            collection.insert_one(post)
-    print('Update #' + str(count))
+            try:
+                collection.insert_one(post)
+            except Exception as e:
+                print(e)
+
+
+    print('Update #' + str(count) + ' at ' + loc_dt.strftime(fmt))
+    # print(users)
         # print(users)
 
 
@@ -293,10 +338,12 @@ async def on_message(message):
     # if message.author.id != int(os.environ.get('BOT_ID')):
         # messages += 1
 
-    global users
+    # global users
     # ignore all bot messages
+    user = None
     if not message.author.bot:
         if message.author.id not in users:
+            # print('here')
             users[message.author.id] = User(message.author.name, message.author.id)
         user = users[message.author.id]
         # user = users.get(message.author.id, User(message.author.id)) 
@@ -309,11 +356,29 @@ async def on_message(message):
             user.occurrences.append(1)
         # print(message.content)
         # print(user)
+
+    if user and user.scrambled:
+        if (time.time() - user.start) > user.dur:
+            user.cipher = dict()
+            user.start = 0
+            user.dur = 0
+        else:
+            await message.channel.purge(limit=1)
+            result = ''
+            for c in message.content:
+                if c in alphabet:
+                    result += user.cipher[c]
+                else:
+                    result += c
+            await message.channel.send(f'{message.author.name} says \"{result}\"')
+            # discord disallows editting others' messages
+            # await message.edit(content=result)
+
     # https://stackoverflow.com/questions/49331096/why-does-on-message-stop-commands-from-working
     await client.process_commands(message)
 
-@client.command()
-async def max(ctx, member : discord.Member):
+@client.command(aliases=['max'])
+async def _max(ctx, member : discord.Member):
     # user = ctx.message.author.id
     name, discriminator = member.name, member.id
     data = collection.find_one({'_id': discriminator})
@@ -321,4 +386,145 @@ async def max(ctx, member : discord.Member):
     # await ctx.send(f'{ctx.message.author.name} has said \'{data["user"].getMax()}\'\n {data["user"].getMaxOccur()} times.')
     await ctx.send(f'{name} has said \"{data["user"].getMax()}\"\n{data["user"].getMaxOccur()} times.')
 
+
+alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+
+@client.command()
+async def scramble(ctx, member : discord.Member, seconds=15):
+    member.mute(ctx)
+    if seconds > 60:
+        seconds = 60
+    name, id = member.name, member.id
+    scralphabet = dict()
+    used = 26 * [False]
+    for c in alphabet:
+        sel = c
+        while c == sel or used[alphabet.index(sel)]:
+            sel = random.choice(alphabet)
+        scralphabet[c] = sel
+        used[alphabet.index(sel)] = True
+    if id not in users:
+        users[id] = User(name, id)
+    u = users[id]
+    u.cipher = scralphabet
+    u.start = time.time()
+    u.dur = seconds
+
+def read_data(collection):
+    data = collection.find({})
+    for result in data:
+        users[result['_id']] = result['user']
+
+@client.command()
+async def say(ctx, *, message):
+    if 'say.wav' in os.listdir('./assets'):
+        os.remove('./assets/say.wav')
+    tts = gTTS(message)
+    tts.save('./assets/say.wav')
+    voice = ctx.guild.voice_client
+    if voice:
+        if voice.is_playing():
+            voice.stop()
+    # channel = client.get_channel(ctx.channel.id)
+    channel = ctx.message.author.voice.channel
+    print(channel)
+    try:
+        # await client.join_voice_channel(channel)
+        await channel.connect()
+        await asyncio.sleep(1)
+    except Exception as e:
+        print(e)
+        await ctx.guild.get_member(int(os.environ.get('BOT_ID'))).move_to(channel)
+    voice = ctx.guild.voice_client
+    voice.play(discord.FFmpegPCMAudio('./assets/say.wav'))
+    voice.volume = 70
+
+def read_games():
+    global games
+    global my_games
+    with open('games.json', 'r') as f:
+        games_list = json.load(f)
+    for game in games_list:
+        games.append(games_list[game])
+    with open('my_games.json', 'r') as f:
+        games_list = json.load(f)
+    for game in games_list:
+        my_games.append(games_list[game])
+    # print(games)
+# @tasks.loop(seconds=60)
+@tasks.loop(minutes=7)
+async def add_games():
+    global games
+    for user in client.get_all_members():
+        # print(user.name, type(user.status), type(discord.Status.offline))
+        # if isinstance(user.activity, discord.Game):
+        #     print(user.activity.name)
+        #     break
+        if user.status != discord.Status.offline and user.activity and user.activity.type == discord.ActivityType.playing and not user.bot:
+            name = user.activity.name
+            # print(name)
+            if name not in games:
+                games.append(user.activity.name)
+    with open('games.json', 'r') as f:
+        data = json.load(f)
+    count = 1
+    # int_keys = [int(k) for k in data]
+    size = len(data)
+    for i in range(size, len(games)):
+        data[size + count] = games[i]
+        count += 1
+    with open('games.json', 'w') as f:
+        json.dump(data, f, indent=4)
+
+@client.command()
+@commands.check(special_check)
+async def force(ctx):
+    # global users
+    curr_time, secs = datetime.datetime.now(), time.time()
+    pacific = pytz.timezone('US/Pacific')
+    loc_dt = pacific.localize(curr_time)
+    fmt = '%Y-%m-%d %H:%M:%S %Z%z'
+    global count
+    count += 1
+    # print(users)
+    # print('here')
+    ids = []
+    if collection.count_documents({}) > 0:
+        data = collection.find({})
+        # for result in data:
+        #     print(result)
+        ids = [result['_id'] for result in data]
+        # print(ids)
+        # print(data)
+        # print(ids)
+        # print(users)
+        # print(users[0].id)
+    for user in users:
+        # print(user)
+        u = users[user]
+        # print(u)
+        # print(u.id)
+        if u.id in ids:
+            collection.update_one({'_id': u.id}, {'$set': {'user': u}})
+        else:
+            post = {"_id": u.id, 'user': u}
+            try:
+                collection.insert_one(post)
+            except Exception as e:
+                print(e)
+
+
+    print('(Forced) Update #' + str(count) + ' at ' + loc_dt.strftime(fmt))
+# @tasks.loop(seconds=10)
+@tasks.loop(minutes=30)
+async def change_game():
+    choices = list(dict.fromkeys(games + my_games))
+    # print(choices)
+    if client.activity:
+        sel = client.activity.name
+        while sel == client.activity.name:
+            sel = random.choice(choices)
+        await client.change_presence(activity=discord.Game(sel))
+    else:
+        await client.change_presence(activity=discord.Game(random.choice(choices)))
 client.run(os.environ.get('BOT_KEY'))
