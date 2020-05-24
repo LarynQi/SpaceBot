@@ -4,6 +4,8 @@ from bson.codec_options import CodecOptions
 
 
 import os
+import json
+
 def clear_coll(collection):
 	collection.delete_many({})
 
@@ -11,6 +13,15 @@ def clear_coll(collection):
 def special_check(ctx):
     return ctx.author.id == int(os.environ.get('MY_ID'))
 
+def clear_dupes(file):
+	with open(file, 'r') as f:
+		data = json.load(f)
+	cleaned = dict()
+	for k in data:
+		if data[k] not in cleaned.values():
+			cleaned[len(cleaned) + 1] = data[k]
+	with open(file, 'w') as f:
+		json.dump(cleaned, f, indent=4)
 class User():
 
 	def __init__(self, name, id, mappings={}, words=[], occurrences=[], cipher={}):

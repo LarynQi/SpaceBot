@@ -41,7 +41,7 @@ first = True
 monitoring = False
 start_monitor = ''
 users = {}
-
+scores = dict()
 # @client.event
 # async def on_ready():
 #     print('Bot is ready!')
@@ -80,7 +80,10 @@ async def _8ball(ctx, *, question):
                 "My sources say no.",
                 "Outlook not so good.",
                 "Very doubtful."]
-    await ctx.send(f'Question: {question} \nAnswer: {random.choice(responses)}')
+    # await ctx.message.add_reaction('\U0001F3B1')
+    msg = await ctx.send(f'**Q:** {question} \n**A:** {random.choice(responses)}', file=discord.File('./assets/8ball.png'))
+    await msg.add_reaction('\U0001F3B1')
+
 
 @client.command()
 @commands.has_permissions(manage_messages=True)
@@ -134,7 +137,7 @@ for filename in os.listdir('./cogs'):
 @client.command(aliases=['exit', 'quit'])
 @commands.check(special_check)
 async def _quit(ctx, save='save'):
-    if monitoring and save == 'save':
+    if monitoring and save != 'ds':
         curr_time, secs = datetime.datetime.now(), time.time()
         pacific = pytz.timezone('US/Pacific')
         loc_dt = pacific.localize(curr_time)
@@ -158,9 +161,14 @@ async def on_ready():
     # change_status.start()
     # clear_coll(collection)
     # # update_stats_JSON.start()
+
+    ### cleaning
+    # clear_dupes('games.json')
+
     read_data(collection)
     print(users)
     read_games()
+    load_scores()
     update_DB.start()
     add_games.start()
     change_game.start()
@@ -233,6 +241,11 @@ async def help(ctx):
     embed.add_field(name='/max', value='Display @user\'s most commonly used word', inline=False)
     embed.add_field(name='/8b', value='Ask the 8ball a question!', inline=False)
     embed.add_field(name='/say', value='Tell SpaceBot something to say.', inline=False)
+    embed.add_field(name='/flip', value='Flip a coin.', inline=False)
+    embed.add_field(name='/roll', value='Roll up to 163 die.', inline=False)
+    embed.add_field(name='/scoreboard', value='Display the die-rolling leaderboard.', inline=False)
+
+
 
     await author.send(embed=embed)
 
@@ -391,7 +404,7 @@ alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'
 
 @client.command()
 async def scramble(ctx, member : discord.Member, seconds=15):
-    member.mute(ctx)
+    # member.mute(ctx)
     if seconds > 60:
         seconds = 60
     name, id = member.name, member.id
@@ -427,7 +440,7 @@ async def say(ctx, *, message):
             voice.stop()
     # channel = client.get_channel(ctx.channel.id)
     channel = ctx.message.author.voice.channel
-    print(channel)
+    # print(channel)
     try:
         # await client.join_voice_channel(channel)
         await channel.connect()
@@ -445,11 +458,13 @@ def read_games():
     with open('games.json', 'r') as f:
         games_list = json.load(f)
     for game in games_list:
-        games.append(games_list[game])
+        if games_list[game] not in games:
+            games.append(games_list[game])
     with open('my_games.json', 'r') as f:
         games_list = json.load(f)
     for game in games_list:
-        my_games.append(games_list[game])
+        if games_list[game] not in my_games:
+            my_games.append(games_list[game])
     # print(games)
 # @tasks.loop(seconds=60)
 @tasks.loop(minutes=7)
@@ -527,4 +542,84 @@ async def change_game():
         await client.change_presence(activity=discord.Game(sel))
     else:
         await client.change_presence(activity=discord.Game(random.choice(choices)))
+
+@client.command()
+async def flip(ctx):
+    # embed = discord.Embed(color=discord.Color(0))
+    if random.randint(0, 1) == 1:
+        await ctx.send('**Heads!**', file=discord.File('./assets/heads.png'))
+        # embed.set_author(name='Heads!')
+        # embed.set_image(url='https://github.com/LarynQi/SpaceBot/blob/master/assets/heads.png')
+        # await ctx.send(embed=embed)
+    else:
+        await ctx.send('**Tails!**', file=discord.File('./assets/tails.png'))
+
+die = ('\u2680', '\u2681', '\u2682', '\u2683', '\u2684', '\u2685')
+@client.command()
+async def roll(ctx, n=1):
+    total = 0
+    result = ' rolled a **'
+    for _ in range(n):
+        roll = random.randint(1, 6)
+        if total:
+            result += ' and a **' + str(roll) + '**'
+        else:
+            result += str(roll) + '**'
+        total += roll
+    if n == 1:
+        msg = await ctx.send(f'**{ctx.message.author.name}** {result}')
+        # await msg.add_reaction(die[roll - 1])
+        await msg.add_reaction('\U0001F3B2')
+    else:
+        msg = await ctx.send(f'**{ctx.message.author.name}** {result}\ntotaling to **{str(total)}**')
+        await msg.add_reaction('\U0001F3B2')
+    update_score(ctx.author, total)
+
+
+@client.command()
+async def scoreboard(ctx, n=3):
+    global scores
+    top = []
+    top_scores = [v[1] for v in scores.values()]
+    top_scores.sort(reverse=True)
+    members = ctx.guild.members
+    result = ''
+    seen = set()
+    # print(scores)
+    # print(top_scores)
+    # print(members)
+    # if n > len(members):
+    #     n = len(members)
+    if n > len(scores):
+        n = len(scores)
+    for i in range(n):
+        score = top_scores[i]
+        # for m in members:
+        #     if not m.bot and m.id in scores and scores[m.id][1] == score and m.id not in seen:
+        #         result += f'{str(1 + i)}. **{m.name}** with **{score}**\n'
+        #         print('here')
+        #         seen.add(m.id) 
+        #         break
+        for u in scores:
+            if scores[u][1] == score:
+                result += f'{str(1 + i)}. **{scores[u][0]}** with **{score}**\n'
+                # print('here')
+                seen.add(u) 
+                break
+    await ctx.send(result)
+
+def load_scores():
+    global scores
+    with open('rolls.json', 'r') as f:
+        data = json.load(f)
+    for u in data:
+        scores[u] = data[u]
+
+def update_score(user, score):
+    global scores
+    if score > scores.get(user, 0):
+        scores[user.id] = (user.name, score)
+    with open('rolls.json', 'w') as f:
+        json.dump(scores, f, indent=4)
+        
 client.run(os.environ.get('BOT_KEY'))
