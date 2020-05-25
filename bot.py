@@ -621,5 +621,7 @@ def update_score(user, score):
         scores[user.id] = (user.name, score)
     with open('rolls.json', 'w') as f:
         json.dump(scores, f, indent=4)
+
+
         
 client.run(os.environ.get('BOT_KEY'))
