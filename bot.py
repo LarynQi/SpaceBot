@@ -238,12 +238,12 @@ async def help(ctx):
     )
     embed.set_author(name='Command List')
     embed.add_field(name='/ping', value='Display your latency', inline=False)
-    embed.add_field(name='/max', value='Display @user\'s most commonly used word', inline=False)
+    embed.add_field(name='/max', value='Display @user\'s most commonly used phrase', inline=False)
     embed.add_field(name='/8b', value='Ask the 8ball a question!', inline=False)
     embed.add_field(name='/say', value='Tell SpaceBot something to say.', inline=False)
     embed.add_field(name='/flip', value='Flip a coin.', inline=False)
     embed.add_field(name='/roll', value='Roll up to 163 die.', inline=False)
-    embed.add_field(name='/scoreboard', value='Display the die-rolling leaderboard.', inline=False)
+    embed.add_field(name='/scoreboard', value='Display the die-rolling leaderboard', inline=False)
 
 
 
@@ -354,7 +354,7 @@ async def on_message(message):
     # global users
     # ignore all bot messages
     user = None
-    if not message.author.bot:
+    if not message.author.bot and message.content != "":
         if message.author.id not in users:
             # print('here')
             users[message.author.id] = User(message.author.name, message.author.id)
@@ -391,13 +391,20 @@ async def on_message(message):
     await client.process_commands(message)
 
 @client.command(aliases=['max'])
-async def _max(ctx, member : discord.Member):
+async def _max(ctx, member : discord.Member, n=1):
     # user = ctx.message.author.id
     name, discriminator = member.name, member.id
     data = collection.find_one({'_id': discriminator})
-
+    try:
+        user = users[discriminator]
+        # await ctx.send(f'{name} has said \"{user.getMax()}\"\n**{user.getMaxOccur()}** times.')
+        word, times = user.newMax(n)
+        await ctx.send(f'{name} has said \"{word}\"\n**{times}** times.')
+    except Exception as e:
+        print(e)
+        await ctx.send('Not enough messages.')
     # await ctx.send(f'{ctx.message.author.name} has said \'{data["user"].getMax()}\'\n {data["user"].getMaxOccur()} times.')
-    await ctx.send(f'{name} has said \"{data["user"].getMax()}\"\n{data["user"].getMaxOccur()} times.')
+    # await ctx.send(f'{name} has said \"{data["user"].getMax()}\"\n{data["user"].getMaxOccur()} times.')
 
 
 alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
@@ -405,8 +412,7 @@ alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'
 @client.command()
 async def scramble(ctx, member : discord.Member, seconds=15):
     # member.mute(ctx)
-    if seconds > 60:
-        seconds = 60
+    seconds = min(seconds, 60)
     name, id = member.name, member.id
     scralphabet = dict()
     used = 26 * [False]

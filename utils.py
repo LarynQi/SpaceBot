@@ -50,6 +50,18 @@ class User():
 	def getMax(self):
 		return self.words[self.occurrences.index(self.getMaxOccur())]
 
+	def newMax(self, n):
+		if n > len(self.words):
+			raise ValueError('Not enough messages.')
+		def helper(n, words, occurrences):
+			if n == 1:
+				return words[occurrences.index(max(occurrences))], max(occurrences)
+			else:
+				words.pop(occurrences.index(max(occurrences)))
+				occurrences.pop(occurrences.index(max(occurrences)))
+				return helper(n - 1, words, occurrences)
+		return helper(n, self.words[:], self.occurrences[:])
+
 	def getMaxOccur(self):
 		return max(self.occurrences)
 
@@ -98,12 +110,12 @@ class UserCodec(TypeCodec):
 	python_type = User
 	bson_type = list
 	def transform_python(self, value):
-		if isinstance(value, User):
+		if isinstance(value, self.python_type):
 			return ['User', value.name, value.id, value.mappings, value.words, value.occurrences]
 		return value
 
 	def transform_bson(self, value):
-		if isinstance(value, list) and value and value[0] == 'User':
+		if isinstance(value, self.bson_type) and value and value[0] == 'User':
 			return User(value[1], value[2], value[3], value[4], value[5])
 		else:
 			return value
