@@ -182,10 +182,31 @@ async def change_status():
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         await ctx.send('Command not found.')
-    if isinstance(error, commands.MissingPermissions):
+    elif isinstance(error, commands.MissingPermissions) or isinstance(error, commands.errors.CheckFailure):
         await ctx.send('You do not have permission to use this command.')
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send('Bad argument(s).')
+    elif isinstance(error, commands.errors.CommandInvokeError) and '\'NoneType\' object has no attribute \'channel\'' in str(error):
+        await ctx.send('Please join a voice channel.')
     else:
+        # await ctx.send('You do not have permission to use this command.')
+        await ctx.send('An unexpected error has occurred.')
         print(error)
+        curr_time, secs = datetime.datetime.now(), time.time()
+        pacific = pytz.timezone('US/Pacific')
+        loc_dt = pacific.localize(curr_time)
+        fmt = '%Y-%m-%d %H:%M:%S %Z%z'
+        t = loc_dt.strftime(fmt)
+        with open('errors.json', 'r') as f:
+            data = json.load(f)
+        add = 1
+        if data:
+            add = max(data) + 1
+        # print(dir(error))
+        data[add] = [t, str(type(error)), str(error), ctx.message.content, ctx.author.id, ctx.author.name]
+        with open('errors.json', 'w') as f:
+            json.dump(data, f, indent=4)
+
 
 @clear.error
 async def clear_error(ctx, error):
@@ -244,8 +265,6 @@ async def help(ctx):
     embed.add_field(name='/flip', value='Flip a coin.', inline=False)
     embed.add_field(name='/roll', value='Roll up to 163 die.', inline=False)
     embed.add_field(name='/scoreboard', value='Display the die-rolling leaderboard', inline=False)
-
-
 
     await author.send(embed=embed)
 
@@ -381,6 +400,8 @@ async def on_message(message):
             for c in message.content:
                 if c in alphabet:
                     result += user.cipher[c]
+                elif c.lower() in alphabet:
+                    result += user.cipher[c.lower()].upper()
                 else:
                     result += c
             await message.channel.send(f'{message.author.name} says \"{result}\"')
@@ -402,7 +423,7 @@ async def _max(ctx, member : discord.Member, n=1):
         await ctx.send(f'{name} has said \"{word}\"\n**{times}** times.')
     except Exception as e:
         print(e)
-        await ctx.send('Not enough messages.')
+        await ctx.send(str(e))
     # await ctx.send(f'{ctx.message.author.name} has said \'{data["user"].getMax()}\'\n {data["user"].getMaxOccur()} times.')
     # await ctx.send(f'{name} has said \"{data["user"].getMax()}\"\n{data["user"].getMaxOccur()} times.')
 
@@ -620,14 +641,21 @@ def load_scores():
         data = json.load(f)
     for u in data:
         scores[u] = data[u]
-
+        
 def update_score(user, score):
     global scores
-    if score > scores.get(user, 0):
-        scores[user.id] = (user.name, score)
+    if score > scores.get(str(user.id), [user.name, 0])[1]:
+        scores[str(user.id)] = [user.name, score]
     with open('rolls.json', 'w') as f:
         json.dump(scores, f, indent=4)
-
-
         
+@client.command()
+@commands.check(special_check)
+async def game(ctx, name):
+    choices = list(dict.fromkeys(games + my_games))
+    if name in choices:
+        await client.change_presence(activity=discord.Game(name))
+    else:
+        await ctx.send("Invalid game.")
+
 client.run(os.environ.get('BOT_KEY'))
