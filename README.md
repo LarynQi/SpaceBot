@@ -1,6 +1,6 @@
-<p align="center"><img src="https://image.flaticon.com/icons/svg/2111/2111370.svg" alt="drawing" width="100"/></p>
+<p align="center"><h1>SpaceBot&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://image.flaticon.com/icons/svg/2111/2111370.svg" alt="drawing" width="100"/></p>
 
-# SpaceBot 
+<!-- # SpaceBot  -->
 **A Discord bot for fun using the [discord.py API](https://discordpy.readthedocs.io/en/latest/index.html#)**
 
 ## Demo (more coming soon)
@@ -28,11 +28,25 @@
 - [MongoDB](https://www.mongodb.com/)
   - [BSON Custom Encoder](https://api.mongodb.com/python/current/examples/custom_type.html)
 - [Google Text-to-Speech](https://pypi.org/project/gTTS/)
+- [Heroku](https://www.heroku.com/)
 - Automated data collection and other background tasks
 
 ## Running the bot
 - SpaceBot is not available for public use
-  - Feel free, however, to use the source code in your own discord.py bots
+  - Feel free, however, to use the source code in your own `discord.py` bots
+<p align="center"><h2>Heroku&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://www.flaticon.com/svg/static/icons/svg/873/873120.svg" alt="drawing" width="50"/></p>
+
+##
+<!-- ## Heroku Commands  -->
+- Deploy: `git push heroku master`
+- ssh: `heroku ps:exec --dyno=worker.1`
+  - With `vim`: `heroku vim`
+    - [Source](https://stackoverflow.com/questions/12666799/what-text-editor-is-available-in-heroku-bash-shell) (`heroku plugins:install @jasonheecs/heroku-vim`)
+- Logs: `heroku logs --tail`
+- Config Vars: `heroku config`, `heroku configt:get {VAR}` `heroku config:set {VAR}={VAL}`
+- Copy remote files: `heroku ps:copy {FILENAME}`
+- [Dyno management](https://devcenter.heroku.com/articles/dynos)
+
 
 ### Resources
   - Credits go to [@Lucas](https://www.youtube.com/watch?v=nW8c7vT6Hl4) and [@Tech With Tim](https://www.youtube.com/watch?v=xdg39s4HSJQ&) for the Discord Bot tutorials.
