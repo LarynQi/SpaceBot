@@ -17,6 +17,10 @@ import asyncio
 # from pynacl import *
 # import PyNaCl
 # from pynacl import *
+
+# https://medium.com/@gavinwiener/how-to-schedule-a-python-script-cron-job-dea6cbf69f4e
+# https://github.com/yougov/mongo-connector/issues/876
+
 def get_prefix(client, message):
     with open('prefixes.json', 'r') as f:
         prefixes = json.load(f)
@@ -166,7 +170,7 @@ async def on_ready():
     # clear_dupes('games.json')
 
     read_data(collection)
-    print(users)
+    # print(users)
     read_games()
     load_scores()
     update_DB.start()
@@ -457,6 +461,7 @@ def read_data(collection):
 
 @client.command()
 async def say(ctx, *, message):
+	# await ctx.send("Sorry, this command is currently broken.")
     if 'say.wav' in os.listdir('./assets'):
         os.remove('./assets/say.wav')
     tts = gTTS(message)
@@ -584,23 +589,26 @@ async def flip(ctx):
 die = ('\u2680', '\u2681', '\u2682', '\u2683', '\u2684', '\u2685')
 @client.command()
 async def roll(ctx, n=1):
-    total = 0
-    result = ' rolled a **'
-    for _ in range(n):
-        roll = random.randint(1, 6)
-        if total:
-            result += ' and a **' + str(roll) + '**'
-        else:
-            result += str(roll) + '**'
-        total += roll
-    if n == 1:
-        msg = await ctx.send(f'**{ctx.message.author.name}** {result}')
-        # await msg.add_reaction(die[roll - 1])
-        await msg.add_reaction('\U0001F3B2')
+    if n > 163:
+        await ctx.send(f'Too many die!')
     else:
-        msg = await ctx.send(f'**{ctx.message.author.name}** {result}\ntotaling to **{str(total)}**')
-        await msg.add_reaction('\U0001F3B2')
-    update_score(ctx.author, total)
+        total = 0
+        result = ' rolled a **'
+        for _ in range(n):
+            roll = random.randint(1, 6)
+            if total:
+                result += ' and a **' + str(roll) + '**'
+            else:
+                result += str(roll) + '**'
+            total += roll
+        if n == 1:
+            msg = await ctx.send(f'**{ctx.message.author.name}** {result}')
+            # await msg.add_reaction(die[roll - 1])
+            await msg.add_reaction('\U0001F3B2')
+        else:
+            msg = await ctx.send(f'**{ctx.message.author.name}** {result}\ntotaling to **{str(total)}**')
+            await msg.add_reaction('\U0001F3B2')
+        update_score(ctx.author, total)
 
 
 @client.command()
